@@ -59,6 +59,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
       customerId: widget.customerId,
       amount: double.parse(_amountController.text),
       date: _selectedDate,
+      paymentMode: _paymentMode,
       mode: _paymentMode,
       notes: _notesController.text.isEmpty ? null : _notesController.text,
       createdAt: DateTime.now(),

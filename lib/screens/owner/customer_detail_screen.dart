@@ -11,8 +11,7 @@ import 'add_entry_screen.dart';
 class CustomerDetailScreen extends StatefulWidget {
   final Customer customer;
 
-  const CustomerDetailScreen({Key? key, required this.customer})
-      : super(key: key);
+  const CustomerDetailScreen({super.key, required this.customer});
 
   @override
   State<CustomerDetailScreen> createState() => _CustomerDetailScreenState();
@@ -240,9 +239,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                                             style: TextStyle(
                                                 color: Colors.grey[600]),
                                           ),
-                                          if (entry.amount > 0)
+                                          if (entry.amount != null &&
+                                              entry.amount! > 0)
                                             Text(
-                                              '₹${entry.amount.toStringAsFixed(0)}',
+                                              '₹${entry.amount!.toStringAsFixed(0)}',
                                               style: TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.bold,
@@ -309,7 +309,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
                                             fontWeight: FontWeight.bold),
                                       ),
                                       Text(
-                                        payment.mode,
+                                        payment.paymentMode,
                                         style: TextStyle(
                                             color: Colors.grey[600],
                                             fontSize: 13),

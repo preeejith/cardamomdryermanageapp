@@ -55,6 +55,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       customerId: widget.customer.id,
       amount: double.parse(_amountController.text),
       paymentMode: _paymentMode,
+      mode: _paymentMode,
       date: _selectedDate,
       notes: _notesController.text.isEmpty ? null : _notesController.text,
       createdAt: DateTime.now(),
