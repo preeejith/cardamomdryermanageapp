@@ -1,14 +1,59 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../providers/customer_provider.dart';
-import '../../../providers/drying_entry_provider.dart';
-import '../../../providers/payment_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_state.dart';
+import 'package:cardamom_dryer_app/blocs/drying_entry/drying_entry_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/drying_entry/drying_entry_state.dart';
+import 'package:cardamom_dryer_app/blocs/payment/payment_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/payment/payment_state.dart';
+import '../../models/customer_model.dart';
+import '../../models/drying_entry_model.dart';
 
 class ReportsTab extends StatelessWidget {
   const ReportsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final customerState = context.watch<CustomerBloc>().state;
+    final entryState = context.watch<DryingEntryBloc>().state;
+    // PaymentBloc also needs to be watched if used (conceptually revenue logic usually involves payments,
+    // but the original code calculated revenue from 'customer.totalAmountPayable' which is likely derived from entries/payments in the backend or service?
+    // Wait, original code:
+    // Consumer3<CustomerProvider, DryingEntryProvider, PaymentProvider>
+    // totalRevenue += customer.totalAmountPayable;
+    // totalPending += customer.balanceAmount;
+    // It didn't explicitly use PaymentProvider data in the loop, but it CONSUMED it.
+    // Maybe to ensure it rebuilds if payments change (which updates customer balance).
+    final paymentState = context.watch<PaymentBloc>().state;
+
+    List<Customer> customers = [];
+    List<DryingEntry> entries = [];
+    // payments unused directly but ensuring we are up to date.
+
+    if (customerState is CustomerLoaded) customers = customerState.customers;
+    if (entryState is DryingEntryLoaded) entries = entryState.entries;
+
+    // Loading state check could be here, but maybe we just show 0 until loaded to avoid flickering or if one loads faster.
+    // Or simpler:
+    final isLoading = customerState is CustomerLoading ||
+        entryState is DryingEntryLoading ||
+        paymentState is PaymentLoading;
+    if (isLoading && customers.isEmpty && entries.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final totalCustomers = customers.length;
+    final totalEntries = entries.length;
+    final pendingEntries = entries.where((e) => e.status == 'received').length;
+
+    double totalRevenue = 0;
+    double totalPending = 0;
+
+    for (var customer in customers) {
+      totalRevenue += customer.totalAmountPayable;
+      totalPending += customer.balanceAmount;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reports & Analytics'),
@@ -16,59 +61,43 @@ class ReportsTab extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Consumer3<CustomerProvider, DryingEntryProvider, PaymentProvider>(
-            builder: (context, customerProvider, entryProvider, paymentProvider, child) {
-              final totalCustomers = customerProvider.customers.length;
-              final totalEntries = entryProvider.entries.length;
-              final pendingEntries = entryProvider.entries.where((e) => e.status == 'received').length;
-              
-              double totalRevenue = 0;
-              double totalPending = 0;
-              
-              for (var customer in customerProvider.customers) {
-                totalRevenue += customer.totalAmountPayable;
-                totalPending += customer.balanceAmount;
-              }
-
-              return Column(
-                children: [
-                  _buildStatCard(
-                    'Total Customers',
-                    totalCustomers.toString(),
-                    Icons.people,
-                    Colors.blue,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildStatCard(
-                    'Total Entries',
-                    totalEntries.toString(),
-                    Icons.inventory,
-                    Colors.green,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildStatCard(
-                    'Pending Entries',
-                    pendingEntries.toString(),
-                    Icons.pending,
-                    Colors.orange,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildStatCard(
-                    'Total Revenue',
-                    '₹${totalRevenue.toStringAsFixed(2)}',
-                    Icons.currency_rupee,
-                    Colors.purple,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildStatCard(
-                    'Total Pending',
-                    '₹${totalPending.toStringAsFixed(2)}',
-                    Icons.account_balance_wallet,
-                    Colors.red,
-                  ),
-                ],
-              );
-            },
+          Column(
+            children: [
+              _buildStatCard(
+                'Total Customers',
+                totalCustomers.toString(),
+                Icons.people,
+                Colors.blue,
+              ),
+              const SizedBox(height: 12),
+              _buildStatCard(
+                'Total Entries',
+                totalEntries.toString(),
+                Icons.inventory,
+                Colors.green,
+              ),
+              const SizedBox(height: 12),
+              _buildStatCard(
+                'Pending Entries',
+                pendingEntries.toString(),
+                Icons.pending,
+                Colors.orange,
+              ),
+              const SizedBox(height: 12),
+              _buildStatCard(
+                'Total Revenue',
+                '₹${totalRevenue.toStringAsFixed(2)}',
+                Icons.currency_rupee,
+                Colors.purple,
+              ),
+              const SizedBox(height: 12),
+              _buildStatCard(
+                'Total Pending',
+                '₹${totalPending.toStringAsFixed(2)}',
+                Icons.account_balance_wallet,
+                Colors.red,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           const Text(
@@ -76,9 +105,9 @@ class ReportsTab extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          Consumer<CustomerProvider>(
-            builder: (context, customerProvider, child) {
-              final outstandingCustomers = customerProvider.customers
+          Builder(
+            builder: (context) {
+              final outstandingCustomers = customers
                   .where((c) => c.balanceAmount > 0)
                   .toList()
                 ..sort((a, b) => b.balanceAmount.compareTo(a.balanceAmount));
@@ -122,7 +151,8 @@ class ReportsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),

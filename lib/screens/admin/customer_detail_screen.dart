@@ -1,12 +1,14 @@
 import 'package:cardamom_dryer_app/screens/owner/add_entry_screen.dart';
 import 'package:cardamom_dryer_app/screens/owner/add_payment_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/customer_model.dart';
-import '../../providers/drying_entry_provider.dart';
-import '../../providers/payment_provider.dart';
+import '../../blocs/drying_entry/drying_entry_bloc.dart';
+import '../../blocs/drying_entry/drying_entry_state.dart';
+import '../../blocs/payment/payment_bloc.dart';
+import '../../blocs/payment/payment_state.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   final Customer customer;
@@ -25,11 +27,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-
-    Provider.of<DryingEntryProvider>(context, listen: false)
-        .listenToCustomerEntries(widget.customer.id);
-    Provider.of<PaymentProvider>(context, listen: false)
-        .listenToCustomerPayments(widget.customer.id);
   }
 
   @override
@@ -206,74 +203,110 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen>
   }
 
   Widget _buildEntriesTab() {
-    return Consumer<DryingEntryProvider>(
-      builder: (context, entryProvider, child) {
-        final entries = entryProvider.getEntriesByCustomer(widget.customer.id);
-
-        if (entries.isEmpty) {
-          return const Center(child: Text('No entries yet'));
+    return BlocBuilder<DryingEntryBloc, DryingEntryState>(
+      builder: (context, state) {
+        if (state is DryingEntryLoading) {
+          return const Center(child: CircularProgressIndicator());
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: entries.length,
-          itemBuilder: (context, index) {
-            final entry = entries[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: entry.isDried ? Colors.green : Colors.orange,
-                  child: Icon(
-                    entry.isDried ? Icons.check : Icons.pending,
-                    color: Colors.white,
+        if (state is DryingEntryLoaded) {
+          // Filter entries for this customer
+          final entries = state.entries
+              .where((e) => e.customerId == widget.customer.id)
+              .toList();
+
+          if (entries.isEmpty) {
+            return const Center(child: Text('No entries yet'));
+          }
+
+          // Sort by date descending
+          entries.sort((a, b) => b.date.compareTo(a.date));
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: entries.length,
+            itemBuilder: (context, index) {
+              final entry = entries[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        entry.isDried ? Colors.green : Colors.orange,
+                    child: Icon(
+                      entry.isDried ? Icons.check : Icons.pending,
+                      color: Colors.white,
+                    ),
                   ),
+                  title: Text(
+                      '${entry.freshWeightKg} KG → ${entry.driedWeightKg?.toStringAsFixed(2) ?? '?'} KG'),
+                  subtitle: Text(DateFormat('dd MMM yyyy').format(entry.date)),
+                  trailing: entry.amount != null
+                      ? Text('₹${entry.amount!.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold))
+                      : null,
                 ),
-                title: Text(
-                    '${entry.freshWeightKg} KG → ${entry.driedWeightKg?.toStringAsFixed(2) ?? '?'} KG'),
-                subtitle: Text(DateFormat('dd MMM yyyy').format(entry.date)),
-                trailing: entry.amount != null
-                    ? Text('₹${entry.amount!.toStringAsFixed(2)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold))
-                    : null,
-              ),
-            );
-          },
-        );
+              );
+            },
+          );
+        }
+
+        if (state is DryingEntryError) {
+          return Center(child: Text('Error: ${state.message}'));
+        }
+
+        return const Center(child: Text('No entries available'));
       },
     );
   }
 
   Widget _buildPaymentsTab() {
-    return Consumer<PaymentProvider>(
-      builder: (context, paymentProvider, child) {
-        final payments =
-            paymentProvider.getPaymentsByCustomer(widget.customer.id);
-
-        if (payments.isEmpty) {
-          return const Center(child: Text('No payments yet'));
+    return BlocBuilder<PaymentBloc, PaymentState>(
+      builder: (context, state) {
+        if (state is PaymentLoading) {
+          return const Center(child: CircularProgressIndicator());
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: payments.length,
-          itemBuilder: (context, index) {
-            final payment = payments[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.green,
-                  child: Icon(Icons.payment, color: Colors.white),
+        if (state is PaymentLoaded) {
+          // Filter payments for this customer
+          final payments = state.payments
+              .where((p) => p.customerId == widget.customer.id)
+              .toList();
+
+          if (payments.isEmpty) {
+            return const Center(child: Text('No payments yet'));
+          }
+
+          // Sort by date descending
+          payments.sort((a, b) => b.date.compareTo(a.date));
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: payments.length,
+            itemBuilder: (context, index) {
+              final payment = payments[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Colors.green,
+                    child: Icon(Icons.payment, color: Colors.white),
+                  ),
+                  title: Text('₹${payment.amount.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      '${payment.paymentMode} - ${DateFormat('dd MMM yyyy').format(payment.date)}'),
                 ),
-                title: Text('₹${payment.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(
-                    '${payment.paymentMode} - ${DateFormat('dd MMM yyyy').format(payment.date)}'),
-              ),
-            );
-          },
-        );
+              );
+            },
+          );
+        }
+
+        if (state is PaymentError) {
+          return Center(child: Text('Error: ${state.message}'));
+        }
+
+        return const Center(child: Text('No payments available'));
       },
     );
   }

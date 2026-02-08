@@ -8,15 +8,26 @@ class DryingEntryService {
 
   // Get entries stream for owner
   Stream<List<DryingEntry>> getEntriesStream(String ownerId) {
+    // Client-side sorting to avoid Index issues
+    print(
+        'DEBUG: DryingEntryService - Requesting entries for ownerId: $ownerId');
     return _firestore
         .collection('dryingEntries')
         .where('ownerId', isEqualTo: ownerId)
-        .orderBy('date', descending: true)
+        // .orderBy('date', descending: true) // REMOVED to avoid Index Lockout
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => DryingEntry.fromFirestore(doc))
-          .toList();
+      print(
+          'DEBUG: DryingEntryService - Found ${snapshot.docs.length} documents (Unordered)');
+      final entries =
+          snapshot.docs.map((doc) => DryingEntry.fromFirestore(doc)).toList();
+
+      // Sort in Dart
+      entries.sort((a, b) => b.date.compareTo(a.date));
+      return entries;
+    }).handleError((error) {
+      print('ERROR: DryingEntryService - Query failed: $error');
+      throw error;
     });
   }
 
@@ -51,11 +62,15 @@ class DryingEntryService {
   // Add new drying entry
   Future<String> addEntry(DryingEntry entry) async {
     try {
+      print('DEBUG: Starting addEntry for customer ${entry.customerId}');
       DocumentReference docRef =
           await _firestore.collection('dryingEntries').add(entry.toMap());
+      print('DEBUG: Entry added to Firestore with ID: ${docRef.id}');
 
       // Update customer totals
+      print('DEBUG: Calling updateCustomerTotals');
       await _customerService.updateCustomerTotals(entry.customerId);
+      print('DEBUG: updateCustomerTotals completed');
 
       return docRef.id;
     } catch (e) {

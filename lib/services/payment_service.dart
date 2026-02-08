@@ -8,13 +8,21 @@ class PaymentService {
 
   // Get payments stream for owner
   Stream<List<Payment>> getPaymentsStream(String ownerId) {
+    print('DEBUG: PaymentService - Requesting payments for ownerId: $ownerId');
     return _firestore
         .collection('payments')
         .where('ownerId', isEqualTo: ownerId)
-        .orderBy('date', descending: true)
+        // .orderBy('date', descending: true) // REMOVED to avoid Index Lockout
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => Payment.fromFirestore(doc)).toList();
+      print(
+          'DEBUG: PaymentService - Found ${snapshot.docs.length} documents (Unordered)');
+      final payments =
+          snapshot.docs.map((doc) => Payment.fromFirestore(doc)).toList();
+
+      // Sort in Dart
+      payments.sort((a, b) => b.date.compareTo(a.date));
+      return payments;
     });
   }
 
@@ -33,10 +41,8 @@ class PaymentService {
   // Get single payment
   Future<Payment?> getPayment(String paymentId) async {
     try {
-      DocumentSnapshot doc = await _firestore
-          .collection('payments')
-          .doc(paymentId)
-          .get();
+      DocumentSnapshot doc =
+          await _firestore.collection('payments').doc(paymentId).get();
 
       if (!doc.exists) return null;
       return Payment.fromFirestore(doc);
@@ -49,9 +55,8 @@ class PaymentService {
   // Add payment
   Future<String> addPayment(Payment payment) async {
     try {
-      DocumentReference docRef = await _firestore
-          .collection('payments')
-          .add(payment.toMap());
+      DocumentReference docRef =
+          await _firestore.collection('payments').add(payment.toMap());
 
       // Update customer totals
       await _customerService.updateCustomerTotals(payment.customerId);
@@ -64,12 +69,10 @@ class PaymentService {
   }
 
   // Update payment
-  Future<void> updatePayment(String paymentId, Map<String, dynamic> data) async {
+  Future<void> updatePayment(
+      String paymentId, Map<String, dynamic> data) async {
     try {
-      await _firestore
-          .collection('payments')
-          .doc(paymentId)
-          .update(data);
+      await _firestore.collection('payments').doc(paymentId).update(data);
     } catch (e) {
       print('Error updating payment: $e');
       rethrow;
@@ -79,10 +82,7 @@ class PaymentService {
   // Delete payment
   Future<void> deletePayment(String paymentId, String customerId) async {
     try {
-      await _firestore
-          .collection('payments')
-          .doc(paymentId)
-          .delete();
+      await _firestore.collection('payments').doc(paymentId).delete();
 
       // Update customer totals
       await _customerService.updateCustomerTotals(customerId);
@@ -107,9 +107,7 @@ class PaymentService {
           .orderBy('date', descending: true)
           .get();
 
-      return snapshot.docs
-          .map((doc) => Payment.fromFirestore(doc))
-          .toList();
+      return snapshot.docs.map((doc) => Payment.fromFirestore(doc)).toList();
     } catch (e) {
       print('Error getting payments by date: $e');
       return [];

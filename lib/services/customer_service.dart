@@ -102,11 +102,15 @@ class CustomerService {
   // Update customer totals (called after adding entry or payment)
   Future<void> updateCustomerTotals(String customerId) async {
     try {
+      print(
+          'DEBUG: updateCustomerTotals - Fetching drying entries for $customerId');
       // Get all drying entries for customer
       QuerySnapshot entriesSnapshot = await _firestore
           .collection('dryingEntries')
           .where('customerId', isEqualTo: customerId)
           .get();
+      print(
+          'DEBUG: updateCustomerTotals - Found ${entriesSnapshot.docs.length} entries');
 
       double totalStockGiven = 0;
       double totalDriedWeight = 0;
@@ -123,11 +127,14 @@ class CustomerService {
         }
       }
 
+      print('DEBUG: updateCustomerTotals - Fetching payments');
       // Get all payments for customer
       QuerySnapshot paymentsSnapshot = await _firestore
           .collection('payments')
           .where('customerId', isEqualTo: customerId)
           .get();
+      print(
+          'DEBUG: updateCustomerTotals - Found ${paymentsSnapshot.docs.length} payments');
 
       double paidAmount = 0;
       for (var doc in paymentsSnapshot.docs) {
@@ -135,6 +142,7 @@ class CustomerService {
         paidAmount += (data['amount'] ?? 0).toDouble();
       }
 
+      print('DEBUG: updateCustomerTotals - Fetching customer details');
       // Get old pending amount
       DocumentSnapshot customerDoc =
           await _firestore.collection('customers').doc(customerId).get();
@@ -150,6 +158,7 @@ class CustomerService {
       double balanceAmount =
           (totalAmountPayable + oldPendingAmount) - paidAmount;
 
+      print('DEBUG: updateCustomerTotals - Updating customer document');
       // Update customer document
       await _firestore.collection('customers').doc(customerId).update({
         'totalStockGiven': totalStockGiven + oldStockKg,
@@ -158,6 +167,7 @@ class CustomerService {
         'paidAmount': paidAmount,
         'balanceAmount': balanceAmount,
       });
+      print('DEBUG: updateCustomerTotals - Update complete');
     } catch (e) {
       print('Error updating customer totals: $e');
       rethrow;

@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/customer_provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../blocs/customer/customer_bloc.dart';
+import '../../blocs/customer/customer_event.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/customer_model.dart';
+// import '../../providers/customer_provider.dart'; // Removed CustomerProvider
 
 class AddCustomerScreen extends StatefulWidget {
   const AddCustomerScreen({super.key});
@@ -20,6 +24,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
   final _oldStockController = TextEditingController();
   final _oldPendingController = TextEditingController();
   final _notesController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -36,6 +41,10 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
 
+    setState(() {
+      _isLoading = true;
+    });
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final ownerId = authProvider.currentUser?.ownerId ?? '';
 
@@ -48,31 +57,53 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
       defaultRate: double.tryParse(_defaultRateController.text) ?? 0,
       oldStockKg: double.tryParse(_oldStockController.text) ?? 0,
       oldPendingAmount: double.tryParse(_oldPendingController.text) ?? 0,
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
       createdAt: DateTime.now(),
     );
 
-    final success = await Provider.of<CustomerProvider>(context, listen: false)
-        .addCustomer(customer);
+    final completer = Completer<bool>();
+    context
+        .read<CustomerBloc>()
+        .add(AddCustomer(customer, completer: completer));
 
-    if (!mounted) return;
+    try {
+      final success = await completer.future;
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
 
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Customer added successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context);
-    } else {
-      final errorMessage = Provider.of<CustomerProvider>(context, listen: false).errorMessage;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage ?? 'Failed to add customer'),
-          backgroundColor: Colors.red,
-        ),
-      );
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Customer added successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to add customer'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -170,22 +201,18 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            Consumer<CustomerProvider>(
-              builder: (context, customerProvider, child) {
-                return ElevatedButton(
-                  onPressed: customerProvider.isLoading ? null : _saveCustomer,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: customerProvider.isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Save Customer'),
-                );
-              },
+            ElevatedButton(
+              onPressed: _isLoading ? null : _saveCustomer,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save Customer'),
             ),
           ],
         ),

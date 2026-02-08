@@ -13,6 +13,11 @@ import 'screens/auth/login_screen.dart';
 import 'screens/owner/owner_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'blocs/customer/customer_bloc.dart';
+import 'blocs/drying_entry/drying_entry_bloc.dart';
+import 'blocs/payment/payment_bloc.dart';
+
 import 'providers/theme_provider.dart';
 
 void main() async {
@@ -46,91 +51,99 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          return MaterialApp(
-            title: 'Cardamom Dryer Management',
-            debugShowCheckedModeBanner: false,
-            themeMode: themeProvider.themeMode,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF2E7D32),
-                brightness: Brightness.light,
-              ),
-              textTheme:
-                  GoogleFonts.interTextTheme(ThemeData.light().textTheme),
-              useMaterial3: true,
-              appBarTheme: const AppBarTheme(
-                centerTitle: true,
-                elevation: 0,
-              ),
-              cardTheme: CardTheme(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<CustomerBloc>(create: (_) => CustomerBloc()),
+          BlocProvider<DryingEntryBloc>(create: (_) => DryingEntryBloc()),
+          BlocProvider<PaymentBloc>(create: (_) => PaymentBloc()),
+        ],
+        child: Consumer<ThemeProvider>(
+          builder: (context, themeProvider, child) {
+            return MaterialApp(
+              title: 'Cardamom Dryer Management',
+              debugShowCheckedModeBanner: false,
+              themeMode: themeProvider.themeMode,
+              theme: ThemeData(
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF2E7D32),
+                  brightness: Brightness.light,
                 ),
-              ),
-              inputDecorationTheme: InputDecorationTheme(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                textTheme:
+                    GoogleFonts.interTextTheme(ThemeData.light().textTheme),
+                useMaterial3: true,
+                appBarTheme: const AppBarTheme(
+                  centerTitle: true,
+                  elevation: 0,
                 ),
-                filled: true,
-                fillColor: Colors.grey[50],
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
+                cardTheme: CardTheme(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ),
-            ),
-            darkTheme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF2E7D32),
-                brightness: Brightness.dark,
-              ),
-              textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-              useMaterial3: true,
-              appBarTheme: const AppBarTheme(
-                centerTitle: true,
-                elevation: 0,
-              ),
-              cardTheme: CardTheme(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                inputDecorationTheme: InputDecorationTheme(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                ),
+                elevatedButtonTheme: ElevatedButtonThemeData(
+                  style: ElevatedButton.styleFrom(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
-              inputDecorationTheme: InputDecorationTheme(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+              darkTheme: ThemeData(
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF2E7D32),
+                  brightness: Brightness.dark,
                 ),
-                filled: true,
-                fillColor: Colors.grey[900], // Darker fill for dark mode
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
+                textTheme:
+                    GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+                useMaterial3: true,
+                appBarTheme: const AppBarTheme(
+                  centerTitle: true,
+                  elevation: 0,
+                ),
+                cardTheme: CardTheme(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                inputDecorationTheme: InputDecorationTheme(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[900], // Darker fill for dark mode
+                ),
+                elevatedButtonTheme: ElevatedButtonThemeData(
+                  style: ElevatedButton.styleFrom(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
               ),
-            ),
-            home: const SplashScreen(),
-            routes: {
-              '/login': (context) => const LoginScreen(),
-              '/owner-dashboard': (context) => const OwnerDashboard(),
-              '/admin-dashboard': (context) => const AdminDashboard(),
-            },
-            // Error handling
-            builder: (context, child) {
-              return child ?? const SizedBox();
-            },
-          );
-        },
+              home: const SplashScreen(),
+              routes: {
+                '/login': (context) => const LoginScreen(),
+                '/owner-dashboard': (context) => const OwnerDashboard(),
+                '/admin-dashboard': (context) => const AdminDashboard(),
+              },
+              // Error handling
+              builder: (context, child) {
+                return child ?? const SizedBox();
+              },
+            );
+          },
+        ),
       ),
     );
   }

@@ -34,29 +34,66 @@ class DryingEntry {
   });
 
   factory DryingEntry.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    return DryingEntry(
-      id: doc.id,
-      ownerId: data['ownerId'] ?? '',
-      customerId: data['customerId'] ?? '',
-      date: (data['date'] as Timestamp).toDate(),
-      freshWeightKg: (data['freshWeightKg'] ?? 0).toDouble(),
-      driedWeightKg: data['driedWeightKg'] != null 
-          ? (data['driedWeightKg']).toDouble() 
-          : null,
-      bagsCount: data['bagsCount'] ?? 0,
-      ratePerKg: (data['ratePerKg'] ?? 0).toDouble(),
-      amount: data['amount'] != null ? (data['amount']).toDouble() : null,
-      status: data['status'] ?? 'received',
-      dryingLoss: data['dryingLoss'] != null 
-          ? (data['dryingLoss']).toDouble() 
-          : null,
-      notes: data['notes'],
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      updatedAt: data['updatedAt'] != null 
-          ? (data['updatedAt'] as Timestamp).toDate() 
-          : null,
-    );
+    try {
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+      // Helper to safely parse doubles
+      double parseDouble(dynamic value) {
+        if (value == null) return 0.0;
+        if (value is int) return value.toDouble();
+        if (value is double) return value;
+        if (value is String) return double.tryParse(value) ?? 0.0;
+        return 0.0;
+      }
+
+      // Helper to safely parse DateTime
+      DateTime parseDate(dynamic value) {
+        if (value == null) return DateTime.now();
+        if (value is Timestamp) return value.toDate();
+        if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+        return DateTime.now();
+      }
+
+      return DryingEntry(
+        id: doc.id,
+        ownerId: data['ownerId']?.toString() ?? '',
+        customerId: data['customerId']?.toString() ?? '',
+        date: parseDate(data['date']),
+        freshWeightKg: parseDouble(data['freshWeightKg']),
+        driedWeightKg: data['driedWeightKg'] != null
+            ? parseDouble(data['driedWeightKg'])
+            : null,
+        bagsCount: (data['bagsCount'] is int)
+            ? data['bagsCount']
+            : int.tryParse(data['bagsCount']?.toString() ?? '0') ?? 0,
+        ratePerKg: parseDouble(data['ratePerKg']),
+        amount: data['amount'] != null ? parseDouble(data['amount']) : null,
+        status: data['status']?.toString() ?? 'received',
+        dryingLoss:
+            data['dryingLoss'] != null ? parseDouble(data['dryingLoss']) : null,
+        notes: data['notes']?.toString(),
+        createdAt: parseDate(data['createdAt']),
+        updatedAt:
+            data['updatedAt'] != null ? parseDate(data['updatedAt']) : null,
+      );
+    } catch (e) {
+      print('ERROR: Failed to parse DryingEntry ${doc.id}: $e');
+      print('Raw Data: ${doc.data()}');
+      // Return a safe default or rethrow.
+      // Returning a "corrupted" entry might be better than crashing the whole list.
+      return DryingEntry(
+        id: doc.id,
+        ownerId: '',
+        customerId: '',
+        date: DateTime.now(),
+        freshWeightKg: 0,
+        bagsCount: 0,
+        ratePerKg: 0,
+        status: 'error',
+        notes: 'Error parsing data: $e',
+        createdAt: DateTime.now(),
+      );
+    }
   }
 
   Map<String, dynamic> toMap() {

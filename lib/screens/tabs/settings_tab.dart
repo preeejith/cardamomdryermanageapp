@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../services/data_repair_service.dart';
 
 import '../../../providers/theme_provider.dart';
 
@@ -106,6 +107,17 @@ class SettingsTab extends StatelessWidget {
                   // Navigate to help
                 },
               ),
+              const Divider(),
+              // Data Repair Section
+              ListTile(
+                leading: const Icon(Icons.build, color: Colors.orange),
+                title: const Text('Repair Data'),
+                subtitle: const Text('Fix missing entries/payments'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  _showRepairDialog(context, user?.ownerId ?? '');
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.info),
                 title: const Text('About'),
@@ -157,6 +169,105 @@ class SettingsTab extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  void _showRepairDialog(BuildContext context, String ownerId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _RepairDialog(ownerId: ownerId);
+      },
+    );
+  }
+}
+
+class _RepairDialog extends StatefulWidget {
+  final String ownerId;
+  const _RepairDialog({required this.ownerId});
+
+  @override
+  State<_RepairDialog> createState() => _RepairDialogState();
+}
+
+class _RepairDialogState extends State<_RepairDialog> {
+  final List<String> _logs = [];
+  bool _isComplete = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _startRepair();
+  }
+
+  Future<void> _startRepair() async {
+    final service = DataRepairService();
+    await for (final log in service.repairData(widget.ownerId)) {
+      if (mounted) {
+        setState(() {
+          _logs.add(log);
+        });
+        // Auto-scroll to bottom
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController
+                .jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        });
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _isComplete = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Repairing Data'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 300,
+        child: Column(
+          children: [
+            if (!_isComplete) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 16),
+            ],
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: ListView.builder(
+                  controller: _scrollController,
+                  itemCount: _logs.length,
+                  itemBuilder: (context, index) {
+                    return Text(
+                      _logs[index],
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 12),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        if (_isComplete)
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+      ],
     );
   }
 }

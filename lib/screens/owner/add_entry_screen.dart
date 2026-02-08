@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import '../../providers/drying_entry_provider.dart';
+import '../../blocs/drying_entry/drying_entry_bloc.dart';
+import '../../blocs/drying_entry/drying_entry_event.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/customer_model.dart';
 import '../../models/drying_entry_model.dart';
+// import '../../providers/drying_entry_provider.dart'; // Removed provider
 
 class AddEntryScreen extends StatefulWidget {
   final Customer customer;
@@ -22,6 +26,7 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
   final _rateController = TextEditingController();
   final _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -55,6 +60,10 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
   Future<void> _saveEntry() async {
     if (!_formKey.currentState!.validate()) return;
 
+    setState(() {
+      _isLoading = true;
+    });
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final ownerId = authProvider.currentUser?.ownerId ?? '';
 
@@ -71,23 +80,47 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
       createdAt: DateTime.now(),
     );
 
-    final success = await Provider.of<DryingEntryProvider>(context, listen: false)
-        .addEntry(entry);
+    final completer = Completer<bool>();
+    context.read<DryingEntryBloc>().add(AddEntry(entry, completer: completer));
 
-    if (!mounted) return;
+    try {
+      final success = await completer.future;
 
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entry added successfully'), backgroundColor: Colors.green),
-      );
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(Provider.of<DryingEntryProvider>(context, listen: false).errorMessage ?? 'Failed to add entry'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (!mounted) return;
+
+      if (success) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Entry added successfully'),
+              backgroundColor: Colors.green),
+        );
+        Navigator.pop(context);
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to add entry'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -104,16 +137,19 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
           children: [
             Card(
               child: ListTile(
-                title: Text(widget.customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                title: Text(widget.customer.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(widget.customer.phone),
               ),
             ),
             const SizedBox(height: 16),
             ListTile(
-              title: Text('Date: ${DateFormat('dd MMM yyyy').format(_selectedDate)}'),
+              title: Text(
+                  'Date: ${DateFormat('dd MMM yyyy').format(_selectedDate)}'),
               trailing: const Icon(Icons.calendar_today),
               onTap: _selectDate,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               tileColor: Colors.grey[100],
             ),
             const SizedBox(height: 16),
@@ -168,16 +204,16 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            Consumer<DryingEntryProvider>(
-              builder: (context, entryProvider, child) {
-                return ElevatedButton(
-                  onPressed: entryProvider.isLoading ? null : _saveEntry,
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: entryProvider.isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Save Entry'),
-                );
-              },
+            ElevatedButton(
+              onPressed: _isLoading ? null : _saveEntry,
+              style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16)),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save Entry'),
             ),
           ],
         ),

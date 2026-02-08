@@ -1,13 +1,17 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_event.dart';
+import 'package:cardamom_dryer_app/blocs/drying_entry/drying_entry_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/drying_entry/drying_entry_event.dart';
+import 'package:cardamom_dryer_app/blocs/payment/payment_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/payment/payment_event.dart';
 import 'package:cardamom_dryer_app/screens/tabs/customers_tab.dart';
 import 'package:cardamom_dryer_app/screens/tabs/entries_tab.dart';
 import 'package:cardamom_dryer_app/screens/tabs/reports_tab.dart';
 import 'package:cardamom_dryer_app/screens/tabs/settings_tab.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/customer_provider.dart';
-import '../../providers/drying_entry_provider.dart';
-import '../../providers/payment_provider.dart';
+import 'package:provider/provider.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -26,23 +30,20 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     SettingsTab(),
   ];
 
+  bool _dataLoaded = false;
+
   @override
-  void initState() {
-    super.initState();
-    _initializeData();
-  }
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final authProvider = Provider.of<AuthProvider>(context);
+    final ownerId = authProvider.currentUser?.ownerId;
 
-  void _initializeData() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final ownerId = authProvider.currentUser?.ownerId ?? '';
-
-    if (ownerId.isNotEmpty) {
-      Provider.of<CustomerProvider>(context, listen: false)
-          .listenToCustomers(ownerId);
-      Provider.of<DryingEntryProvider>(context, listen: false)
-          .listenToEntries(ownerId);
-      Provider.of<PaymentProvider>(context, listen: false)
-          .listenToPayments(ownerId);
+    if (ownerId != null && ownerId.isNotEmpty && !_dataLoaded) {
+      _dataLoaded = true;
+      // Trigger data loading once we have a valid ownerId
+      context.read<CustomerBloc>().add(LoadCustomers(ownerId));
+      context.read<DryingEntryBloc>().add(LoadEntries(ownerId));
+      context.read<PaymentBloc>().add(LoadPayments(ownerId));
     }
   }
 

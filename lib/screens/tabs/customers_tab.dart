@@ -1,12 +1,14 @@
 import 'package:cardamom_dryer_app/screens/owner/add_customer_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_event.dart';
+import 'package:cardamom_dryer_app/blocs/customer/customer_state.dart';
+import 'package:cardamom_dryer_app/blocs/drying_entry/drying_entry_bloc.dart';
+import 'package:cardamom_dryer_app/blocs/payment/payment_bloc.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import '../../providers/customer_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../models/customer_model.dart';
-
-import '../admin/customer_detail_screen.dart';
+import '../owner/customer_detail_screen.dart';
 
 class CustomersTab extends StatefulWidget {
   const CustomersTab({super.key});
@@ -17,7 +19,6 @@ class CustomersTab extends StatefulWidget {
 
 class _CustomersTabState extends State<CustomersTab> {
   final TextEditingController _searchController = TextEditingController();
-  List<Customer> _filteredCustomers = [];
 
   @override
   void dispose() {
@@ -34,10 +35,10 @@ class _CustomersTabState extends State<CustomersTab> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final authProvider =
+                  Provider.of<AuthProvider>(context, listen: false);
               final ownerId = authProvider.currentUser?.ownerId ?? '';
-              Provider.of<CustomerProvider>(context, listen: false)
-                  .listenToCustomers(ownerId);
+              context.read<CustomerBloc>().add(LoadCustomers(ownerId));
             },
           ),
         ],
@@ -55,129 +56,143 @@ class _CustomersTabState extends State<CustomersTab> {
                     ? IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {
-                          setState(() {
-                            _searchController.clear();
-                            _filteredCustomers = [];
-                          });
+                          _searchController.clear();
+                          context
+                              .read<CustomerBloc>()
+                              .add(const SearchCustomers(''));
                         },
                       )
                     : null,
               ),
-              onChanged: (value) async {
-                if (value.isEmpty) {
-                  setState(() {
-                    _filteredCustomers = [];
-                  });
-                  return;
-                }
-                
-                final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                final ownerId = authProvider.currentUser?.ownerId ?? '';
-                final results = await Provider.of<CustomerProvider>(
-                  context,
-                  listen: false,
-                ).searchCustomers(ownerId, value);
-                
-                setState(() {
-                  _filteredCustomers = results;
-                });
+              onChanged: (value) {
+                context.read<CustomerBloc>().add(SearchCustomers(value));
               },
             ),
           ),
           Expanded(
-            child: Consumer<CustomerProvider>(
-              builder: (context, customerProvider, child) {
-                final customers = _searchController.text.isEmpty
-                    ? customerProvider.customers
-                    : _filteredCustomers;
+            child: BlocBuilder<CustomerBloc, CustomerState>(
+              builder: (context, state) {
+                if (state is CustomerLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (state is CustomerError) {
+                  return Center(child: Text('Error: ${state.message}'));
+                } else if (state is CustomerLoaded) {
+                  final customers = state.filteredCustomers;
 
-                if (customers.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.people_outline,
-                          size: 80,
-                          color: Colors.grey[400],
+                  if (customers.isEmpty) {
+                    if (_searchController.text.isNotEmpty) {
+                      return const Center(
+                        child: Text(
+                          'No customers found matching search',
+                          style: TextStyle(color: Colors.grey),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No customers yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
+                      );
+                    }
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 80,
+                            color: Colors.grey[400],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Add your first customer',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: customers.length,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemBuilder: (context, index) {
-                    final customer = customers[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                          child: Text(
-                            customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
+                          const SizedBox(height: 16),
+                          Text(
+                            'No customers yet',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: Colors.grey[600],
                             ),
                           ),
-                        ),
-                        title: Text(
-                          customer.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(customer.phone),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text(
-                                  'Balance: ₹${customer.balanceAmount.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    color: customer.balanceAmount > 0
-                                        ? Colors.red
-                                        : Colors.green,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Add your first customer',
+                            style: TextStyle(
+                              color: Colors.grey[500],
                             ),
-                          ],
-                        ),
-                        trailing: Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CustomerDetailScreen(
-                                customer: customer,
-                              ),
-                            ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     );
-                  },
-                );
+                  }
+
+                  return ListView.builder(
+                    itemCount: customers.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemBuilder: (context, index) {
+                      final customer = customers[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            child: Text(
+                              customer.name.isNotEmpty
+                                  ? customer.name[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            customer.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(customer.phone),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Balance: ₹${customer.balanceAmount.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      color: customer.balanceAmount > 0
+                                          ? Colors.red
+                                          : Colors.green,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            final customerBloc = context.read<CustomerBloc>();
+                            final dryingEntryBloc =
+                                context.read<DryingEntryBloc>();
+                            final paymentBloc = context.read<PaymentBloc>();
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MultiBlocProvider(
+                                  providers: [
+                                    BlocProvider.value(value: customerBloc),
+                                    BlocProvider.value(value: dryingEntryBloc),
+                                    BlocProvider.value(value: paymentBloc),
+                                  ],
+                                  child: CustomerDetailScreen(
+                                    customer: customer,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
               },
             ),
           ),
